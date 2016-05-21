@@ -30,6 +30,7 @@
 #include <pcap.h>
 #include "passivedns.h"
 #include "dns.h"
+#include "udp-output.h"
 
 #ifdef HAVE_JSON
 #include <jansson.h>
@@ -1113,6 +1114,9 @@ void print_passet(pdns_record *l, pdns_asset *p, ldns_rr *rr,
         openlog(PDNS_IDENT, LOG_NDELAY, LOG_LOCAL7);
         syslog(LOG_INFO, "%s", output);
         closelog();
+    }
+    if (udp_socket){
+       udp_send(output);
     }
 
     if (is_err_record) {

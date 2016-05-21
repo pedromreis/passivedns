@@ -44,6 +44,7 @@
 #include <limits.h>
 #include "passivedns.h"
 #include "dns.h"
+#include "udp-output.h"
 
 #ifdef HAVE_JSON
 #include <jansson.h>
@@ -1215,6 +1216,11 @@ int main(int argc, char *argv[])
 
 #define ARGS "i:H:r:c:nyYNjJl:L:d:hb:Dp:C:P:S:f:X:u:g:T:V"
 
+    //udp_socket = -1;
+    //udp_host = NULL;
+
+    
+
     while ((ch = getopt(argc, argv, ARGS)) != -1)
         switch (ch) {
         case 'i':
@@ -1517,6 +1523,9 @@ int main(int argc, char *argv[])
     }
 
     alarm(TIMEOUT);
+    olog("Sending udp log init\n");
+    udp_initialize("127.0.0.1", 514);
+    udp_send("hello world from passive DNS\n");
 
     if (!config.pcap_file) olog("[*] Sniffing...\n\n");
 
