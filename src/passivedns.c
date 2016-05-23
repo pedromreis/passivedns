@@ -1550,6 +1550,8 @@ int main(int argc, char *argv[])
     redisLibeventAttach(c,base);
     redisAsyncSetConnectCallback(c,connectCallback);
     redisAsyncSetDisconnectCallback(c,disconnectCallback);
+    char *output ="Hello world!!";
+    redisAsyncCommand(c, NULL, NULL, "LPUSH passivedns %s", output, strlen(output));
 
     /* End */
 
