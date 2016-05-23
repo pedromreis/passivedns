@@ -47,6 +47,7 @@
 #include <hiredis/hiredis.h>
 #include <hiredis/async.h>
 #include <hiredis/adapters/libevent.h>
+#include <event2/event.h>
 /* End */
 
 #include "passivedns.h"
