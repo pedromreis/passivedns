@@ -140,7 +140,8 @@ fi
 # add hiredis
 LDFLAGS="${LDFLAGS} -lhiredis"
 
-
+# add libevent
+LDFLAGS="${LDFLAGS} -levent"
 
 
 # Checks for PF_RING.

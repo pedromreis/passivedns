@@ -24,11 +24,6 @@
 
 #include <ldns/ldns.h>
 
-/* Added by Pi */
-#include <hiredis/hiredis.h>
-#include <hiredis/async.h>
-/* End */
-
 /* Default flags for types to handle */
 #define DNS_CHK_AAAA        0x00000001
 #define DNS_CHK_A           0x00000002
@@ -176,12 +171,6 @@ void parse_field_flags (char *args);
 void parse_dns_flags (char *args);
 void update_dns_stats(packetinfo *pi, uint8_t code);
 uint16_t pdns_chk_dnsfe(uint16_t rcode);
-
-/* Added by Pi */
-void getCallback(redisAsyncContext *c, void *r, void *privdata); 
-void connectCallback(const redisAsyncContext *c, int status);
-void disconnectCallback(const redisAsyncContext *c, int status);
-/* End */
 
 #endif /* DNS_H */
 
