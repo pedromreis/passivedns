@@ -47,6 +47,7 @@
 #include <hiredis/hiredis.h>
 #include <hiredis/async.h>
 #include <hiredis/adapters/libevent.h>
+#include <event2/event.h>
 /* End */
 
 #include "passivedns.h"
@@ -1550,6 +1551,8 @@ int main(int argc, char *argv[])
     redisLibeventAttach(c,base);
     redisAsyncSetConnectCallback(c,connectCallback);
     redisAsyncSetDisconnectCallback(c,disconnectCallback);
+    char *output ="Hello world!!";
+    redisAsyncCommand(c, NULL, NULL, "LPUSH passivedns %s", output, strlen(output));
 
     /* End */
 
