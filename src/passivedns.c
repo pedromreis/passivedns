@@ -45,13 +45,6 @@
 #include "passivedns.h"
 #include "dns.h"
 
-/* hiredis */
-
-//#include <hiredis/hiredis.h>
-//#include <hiredis/async.h>
-//#include <hiredis/adapters/libevent.h>
-//#include "redis-conn.c"
-
 #ifdef HAVE_JSON
 #include <jansson.h>
 #endif /* HAVE_JSON */
@@ -64,10 +57,16 @@
 #define CONFDIR "/etc/passivedns/"
 #endif
 
+
+// redis
+
+struct timeval redisTimeout = { 1, 500000 }; // 1.5 seconds
+
 /*  G L O B A L S  *** (or candidates for refactoring, as we say)***********/
 globalconfig config;
 connection *bucket[BUCKET_SIZE];
 uint8_t signal_reopen_log_files = 0;
+
 
 /*  I N T E R N A L   P R O T O T Y P E S  ***********************************/
 static void usage();
@@ -1060,20 +1059,47 @@ void free_config()
 
 void print_pdns_stats()
 {
-    olog("\n");
-    olog("-- Total DNS records allocated            :%12u\n",config.p_s.dns_records);
-    olog("-- Total DNS assets allocated             :%12u\n",config.p_s.dns_assets);
-    olog("-- Total DNS packets over IPv4/TCP        :%12u\n",config.p_s.ip4_dns_tcp);
-    olog("-- Total DNS packets over IPv6/TCP        :%12u\n",config.p_s.ip6_dns_tcp);
-    olog("-- Total DNS packets over TCP decoded     :%12u\n",config.p_s.ip4_dec_tcp_ok + config.p_s.ip6_dec_tcp_ok);
-    olog("-- Total DNS packets over TCP failed      :%12u\n",config.p_s.ip4_dec_tcp_er + config.p_s.ip6_dec_tcp_er);
-    olog("-- Total DNS packets over IPv4/UDP        :%12u\n",config.p_s.ip4_dns_udp);
-    olog("-- Total DNS packets over IPv6/UDP        :%12u\n",config.p_s.ip6_dns_udp);
-    olog("-- Total DNS packets over UDP decoded     :%12u\n",config.p_s.ip4_dec_udp_ok + config.p_s.ip6_dec_udp_ok);
-    olog("-- Total DNS packets over UDP failed      :%12u\n",config.p_s.ip4_dec_udp_er + config.p_s.ip6_dec_udp_er);
-    olog("-- Total packets received from libpcap    :%12u\n",config.p_s.got_packets);
-    olog("-- Total Ethernet packets received        :%12u\n",config.p_s.eth_recv);
-    olog("-- Total VLAN packets received            :%12u\n",config.p_s.vlan_recv);
+    FILE *handle = stdout;
+    if (config.use_stats_file) {
+        handle = fopen(config.statsfile, "w");
+        if (handle == NULL) {
+            olog("[!] Error opening stats file %s: %s\n", config.statsfile,
+                 strerror(errno));
+            return;
+        }
+    }
+
+    flog(handle, "\n");
+    flog(handle, "-- Total DNS records allocated            :%12u\n",
+         config.p_s.dns_records);
+    flog(handle, "-- Total DNS assets allocated             :%12u\n",
+         config.p_s.dns_assets);
+    flog(handle, "-- Total DNS packets over IPv4/TCP        :%12u\n",
+         config.p_s.ip4_dns_tcp);
+    flog(handle, "-- Total DNS packets over IPv6/TCP        :%12u\n",
+         config.p_s.ip6_dns_tcp);
+    flog(handle, "-- Total DNS packets over TCP decoded     :%12u\n",
+         config.p_s.ip4_dec_tcp_ok + config.p_s.ip6_dec_tcp_ok);
+    flog(handle, "-- Total DNS packets over TCP failed      :%12u\n",
+         config.p_s.ip4_dec_tcp_er + config.p_s.ip6_dec_tcp_er);
+    flog(handle, "-- Total DNS packets over IPv4/UDP        :%12u\n",
+         config.p_s.ip4_dns_udp);
+    flog(handle, "-- Total DNS packets over IPv6/UDP        :%12u\n",
+         config.p_s.ip6_dns_udp);
+    flog(handle, "-- Total DNS packets over UDP decoded     :%12u\n",
+         config.p_s.ip4_dec_udp_ok + config.p_s.ip6_dec_udp_ok);
+    flog(handle, "-- Total DNS packets over UDP failed      :%12u\n",
+         config.p_s.ip4_dec_udp_er + config.p_s.ip6_dec_udp_er);
+    flog(handle, "-- Total packets received from libpcap    :%12u\n",
+         config.p_s.got_packets);
+    flog(handle, "-- Total Ethernet packets received        :%12u\n",
+         config.p_s.eth_recv);
+    flog(handle, "-- Total VLAN packets received            :%12u\n",
+         config.p_s.vlan_recv);
+
+    if (config.use_stats_file) {
+        fclose(handle);
+    }
 }
 
 void usage()
@@ -1099,6 +1125,7 @@ void usage()
     olog(" -J              Use JSON as output in NXDOMAIN log file.\n");
 #endif /* HAVE_JSON */
     olog(" -f <fields>     Choose which fields to print (default: -f SMcsCQTAtn).\n");
+    olog(" -s <file>       Print stats on signal (SIGUSR1) to this file.\n");
     olog(" -b 'BPF'        Berkley Packet Filter (default: 'port 53').\n");
     olog(" -p <file>       Name of pid file (default: /var/run/passivedns.pid).\n");
     olog(" -S <mem>        Soft memory limit in MB (default: 256).\n");
@@ -1168,15 +1195,15 @@ extern int optind, opterr, optopt; // getopt()
 
 /* magic main */
 
-//struct event_base *base; //= event_base_new();
-//redisAsyncContext *c;    //= redisAsyncConnect("127.0.0.1", 6379);
 
-const char *hostname = "127.0.0.1";
-int port = 6379;
-struct timeval timeout = { 1, 500000 }; // 1.5 seconds
+
 
 int main(int argc, char *argv[])
 {
+
+
+
+
 
     int ch = 0; // verbose_already = 0;
     int daemon = 0;
@@ -1186,6 +1213,7 @@ int main(int argc, char *argv[])
     config.bpff = BPFF;
     config.logfile = "/var/log/passivedns.log";
     config.logfile_nxd = "/var/log/passivedns.log";
+    config.statsfile = "/var/log/passivedns.stats";
     config.pidfile = "/var/run/passivedns.pid";
     config.promisc = 1;
     config.output_log = 0;
@@ -1229,7 +1257,7 @@ int main(int argc, char *argv[])
     signal(SIGUSR1, print_pdns_stats);
     signal(SIGUSR2, expire_all_dns_records);
 
-#define ARGS "i:H:r:c:nyYNjJl:L:d:hb:Dp:C:P:S:f:X:u:g:T:V"
+#define ARGS "i:H:r:c:nyYNjJl:s:L:d:hb:Dp:C:P:S:f:X:u:g:T:V"
 
     while ((ch = getopt(argc, argv, ARGS)) != -1)
         switch (ch) {
@@ -1281,6 +1309,10 @@ int main(int argc, char *argv[])
             break;
         case 'S':
             config.mem_limit_max = (strtol(optarg, NULL, 0) * 1024 * 1024);
+            break;
+        case 's':
+            config.use_stats_file = 1;
+            config.statsfile = optarg;
             break;
         case 'f':
             parse_field_flags(optarg);
@@ -1532,10 +1564,8 @@ int main(int argc, char *argv[])
                  pcap_geterr(config.handle));
     }
 
-    alarm(TIMEOUT);
-
     // Redis Connection
-    cc = redisConnectWithTimeout(hostname, port, timeout);
+    cc = redisConnectWithTimeout("127.0.0.1", 6379, redisTimeout);
     if (cc == NULL || cc->err) {
         if (cc) {
             printf("Connection error: %s\n", cc->errstr);
@@ -1551,10 +1581,12 @@ int main(int argc, char *argv[])
     reply = redisCommand(cc,"PING");
     printf("PING: %s\n", reply->str);
     freeReplyObject(reply);
-    char *msg="Passivedns ready to send!";
-    reply = redisCommand(cc,"LPUSH passivedns %s-from-%s",msg,config.dev);
+    char texto[]="Passivedns v2 ready to send!";
+    reply = redisCommand(cc,"LPUSH passivedns Status_%s", texto);
     freeReplyObject(reply);
 
+
+    alarm(TIMEOUT);
 
     if (!config.pcap_file) olog("[*] Sniffing...\n\n");
 

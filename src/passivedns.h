@@ -21,16 +21,19 @@
 
 /*  I N C L U D E S  **********************************************************/
 #include "config.h"
+#include <hiredis/hiredis.h>
+
+redisContext *cc;
+redisReply *reply;
+
+//struct timeval redisTimeout = { 1, 500000 }; // 1.5 seconds
+
+
+
 
 #ifdef HAVE_PFRING
 #include <pfring.h>
 #endif /* HAVE_PFRING */
-
-/* hiredis */
-#include <hiredis/hiredis.h>
-//#include <hiredis/async.h>
-//#include <hiredis/adapters/libevent.h>
-//#include "redis-conn.h"
 
 /*  D E F I N E S  ************************************************************/
 #define TIMEOUT                       60
@@ -502,6 +505,8 @@ typedef struct _globalconfig {
     uint8_t             use_json;          /* Use JSON as output in log */
     uint8_t             use_json_nxd;      /* Use JSON as output in NXDOMAIN log */
 #endif /* HAVE_JSON */
+    uint8_t             use_stats_file;    /* Print stats on signal to file */
+    char                *statsfile;        /* File to print stats to */
     uint8_t             setfilter;
     uint8_t             promisc;           /* set interface promisc mode */
     uint8_t             drop_privs_flag;   /* Flag marking to drop privs */
@@ -551,6 +556,7 @@ typedef struct _globalconfig {
 #define ISSET_INTERRUPT_DNS(config)     ((config).intr_flag & INTERRUPT_DNS)
 
 #define plog(fmt, ...) do{ fprintf(stdout, (fmt), ##__VA_ARGS__); }while(0)
+#define flog(h, fmt, ...) do{ fprintf(h, fmt, ##__VA_ARGS__); }while(0)
 #define olog(fmt, ...) do{ if(!(ISSET_CONFIG_QUIET(config))) fprintf(stdout, (fmt), ##__VA_ARGS__); }while(0)
 //#define DEBUG 1
 #ifdef DEBUG
@@ -566,11 +572,4 @@ typedef struct _globalconfig {
 int cxt_update_client(connection *cxt, packetinfo *pi);
 int cxt_update_unknown(connection *cxt, packetinfo *pi);
 int cxt_update_server(connection *cxt, packetinfo *pi);
-
-/* Hiredis*/
-//struct event_base *base; //= event_base_new();
-//redisAsyncContext *c;    //= redisAsyncConnect("127.0.0.1", 6379);
-redisContext *cc;
-redisReply *reply;
-
 
